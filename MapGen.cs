@@ -16,6 +16,8 @@ namespace MapGen
         }
     }
 
+
+
     /// <summary>
     /// Segment Type    
     /// </summary>
@@ -80,23 +82,39 @@ namespace MapGen
     /// </summary>
     public class LevelGenerator
     {
+        const int MAX_SLOPE_LENGTH = 3;
+
         public int ScreenWidth { get; set; } = 40;
         public int ScreenTop { get; set; } = 1;
         public int ScreenBottom { get; set; } = 5;
         public int GroundStart { get; set; } = 5;
 
-        private readonly List<SegmentType> levelSegments = new();
-        private readonly List<int> segmentHeights = new();
-        
+        private readonly List<SegmentType> levelSegments = [];
+        private readonly List<int> segmentHeights = [];
+        private readonly double[] cumulativeWeights;
         private readonly Random random = new();
 
         private SegmentType lastSegment = SegmentType.Ground;
         private int lastHeight = 0;
         private int slopeLength = 0;
 
-        // Weights for each segment type
-        // Ground, Cavity, SlopeUp, SlopeDown, Spike
-        private readonly double[] weights = [0.35, 0.10, 0.20, 0.20, 0.15];
+        /// <summary>
+        /// Level Generator
+        /// </summary>
+        public LevelGenerator()
+        {
+            // Weights for each segment type
+            // Ground, Cavity, SlopeUp, SlopeDown, Spike
+            double[] weights = [0.35, 0.10, 0.20, 0.20, 0.15];
+
+            // Pre-calculate the cumulative weights
+            cumulativeWeights = new double[weights.Length];
+            cumulativeWeights[0] = weights[0];
+            for (int i = 1; i < weights.Length; i++)
+            {
+                cumulativeWeights[i] = cumulativeWeights[i - 1] + weights[i];
+            }
+        }
 
         /// <summary>
         /// 
@@ -127,28 +145,28 @@ namespace MapGen
             }
             else if (lastSegment == SegmentType.Ground)
             {
-                SegmentType segmentType = GetWeightedRandomSegment(random);
+                segment = GetWeightedRandomSegment(random);
 
-                switch (segmentType)
+                switch (segment)
                 {
                     case SegmentType.Cavity:
-                        segment = SegmentType.Cavity;
                         break;
 
                     case SegmentType.SlopeUp when height > ScreenTop:
-                        segment = SegmentType.SlopeUp;
                         height = Math.Max(ScreenTop, lastHeight - 1);
-                        slopeLength = height > ScreenTop ? random.Next(1, 3) : 0;
+                        slopeLength = height > ScreenTop ? random.Next(1, MAX_SLOPE_LENGTH) : 0;
                         break;
 
                     case SegmentType.SlopeDown when height < ScreenBottom:
-                        segment = SegmentType.SlopeDown;
                         height = Math.Min(lastHeight + 1, ScreenBottom);
-                        slopeLength = height < ScreenBottom ? random.Next(1, 3) : 0;
+                        slopeLength = height < ScreenBottom ? random.Next(1, MAX_SLOPE_LENGTH) : 0;
                         break;
 
                     case SegmentType.Spike:
-                        segment = SegmentType.Spike;
+                        break;
+
+                    default:
+                        segment = SegmentType.Ground;
                         break;
                 }
             }
@@ -160,8 +178,8 @@ namespace MapGen
                 segmentHeights[i] = segmentHeights[i + 1];
             }
 
-            lastSegment = levelSegments[ScreenWidth - 1] = segment;
-            lastHeight = segmentHeights[ScreenWidth - 1] = height;
+            lastSegment = levelSegments[^1] = segment;
+            lastHeight = segmentHeights[^1] = height;
         }
 
         /// <summary>
@@ -171,14 +189,6 @@ namespace MapGen
         /// <returns></returns>
         public SegmentType GetWeightedRandomSegment(Random random)
         {
-            // Calculate the cumulative weights
-            var cumulativeWeights = new double[weights.Length];
-            cumulativeWeights[0] = weights[0];
-            for (int i = 1; i < weights.Length; i++)
-            {
-                cumulativeWeights[i] = cumulativeWeights[i - 1] + weights[i];
-            }
-
             // Generate a random number between 0 and 1
             double randomValue = random.NextDouble();
 
@@ -196,8 +206,7 @@ namespace MapGen
         }
 
         /// <summary>
-        /// Draw Map with Colours
-        /// Green for ground and slopes, Red and Dark Gray for cavity and Yellow for spikes
+        /// Draw Map with Colors
         /// </summary>
         public void DrawMap()
         {
@@ -221,7 +230,6 @@ namespace MapGen
                         Console.BackgroundColor = ConsoleColor.DarkGray;
                         Console.SetCursorPosition(i, segmentHeight + 2);
                         Console.Write("_");
-                        Console.ResetColor();
                         break;
 
                     case SegmentType.SlopeUp:
